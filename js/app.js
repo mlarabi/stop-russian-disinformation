@@ -101,7 +101,7 @@ async function flood(target) {
         })
         .then((response) => {
           if (response && !response.ok) {
-            console.error(respone)
+            console.error(response)
           }
         })
 
